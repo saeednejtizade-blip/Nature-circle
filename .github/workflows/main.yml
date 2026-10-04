@@ -22,17 +22,37 @@ jobs:
           ZIP_FILE=$(find . -maxdepth 1 -type f -name '*.zip' | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No ZIP file found in repository root."
+            echo "ERROR: No builder ZIP found."
             exit 1
           fi
 
-          echo "Using ZIP: $ZIP_FILE"
+          echo "Builder ZIP: $ZIP_FILE"
 
           mkdir -p builder
           unzip -q "$ZIP_FILE" -d builder
 
-          echo "Extracted files:"
-          find builder -maxdepth 3 -type f | head -n 100
+          echo "Builder contents:"
+          find builder -maxdepth 2 -type f
+
+      - name: Extract Nature Circle source
+        shell: bash
+        run: |
+          set -e
+
+          SOURCE_ZIP=$(find builder -type f -name 'nature_circle_source.zip' | head -n 1)
+
+          if [ -z "$SOURCE_ZIP" ]; then
+            echo "ERROR: nature_circle_source.zip not found."
+            exit 1
+          fi
+
+          echo "Source ZIP: $SOURCE_ZIP"
+
+          mkdir -p source
+          unzip -q "$SOURCE_ZIP" -d source
+
+          echo "Source contents:"
+          find source -maxdepth 3 -type f | head -n 200
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -45,19 +65,19 @@ jobs:
         run: |
           set -e
 
-          GRADLEW=$(find builder -type f -name gradlew | head -n 1)
+          GRADLEW=$(find source -type f -name 'gradlew' | head -n 1)
 
           if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew was not found."
-            echo "Searching extracted project:"
-            find builder -maxdepth 5 -type f | head -n 200
+            echo "ERROR: gradlew was not found inside source ZIP."
+            echo "Searching source:"
+            find source -maxdepth 6 -type f | head -n 300
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$GRADLEW")
 
-          echo "GRADLEW=$GRADLEW"
-          echo "PROJECT_DIR=$PROJECT_DIR"
+          echo "Gradle wrapper: $GRADLEW"
+          echo "Project directory: $PROJECT_DIR"
 
           echo "GRADLEW=$GRADLEW" >> "$GITHUB_ENV"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -66,6 +86,7 @@ jobs:
         shell: bash
         run: |
           set -e
+
           cd "$PROJECT_DIR"
           chmod +x gradlew
 
