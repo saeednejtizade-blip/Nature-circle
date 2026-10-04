@@ -12,36 +12,86 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Find and extract project
+      - name: Find and extract APK builder
+        shell: bash
         run: |
+          set -e
+
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name '*.zip' | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: No ZIP file found in repository root."
+            exit 1
+          fi
+
+          echo "Using ZIP: $ZIP_FILE"
+
           mkdir -p builder
-          unzip -q ./*.zip -d builder
+          unzip -q "$ZIP_FILE" -d builder
+
+          echo "Extracted files:"
+          find builder -maxdepth 3 -type f | head -n 100
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-
-
-      - name: Find Gradle project
+      - name: Locate Gradle project
+        shell: bash
         run: |
-          GRADLEW=$(find builder -name gradlew -type f | head -n 1)
-          echo "GRADLEW=$GRADLEW" >> $GITHUB_ENV
-          echo "PROJECT_DIR=$(dirname "$GRADLEW")" >> $GITHUB_ENV
+          set -e
 
-      - name: Build APK
+          GRADLEW=$(find builder -type f -name gradlew | head -n 1)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found."
+            echo "Searching extracted project:"
+            find builder -maxdepth 5 -type f | head -n 200
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "GRADLEW=$GRADLEW"
+          echo "PROJECT_DIR=$PROJECT_DIR"
+
+          echo "GRADLEW=$GRADLEW" >> "$GITHUB_ENV"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Prepare Gradle
+        shell: bash
         run: |
+          set -e
           cd "$PROJECT_DIR"
           chmod +x gradlew
-          ./gradlew assembleDebug
-          cp app/build/outputs/apk/debug/*.apk "$GITHUB_WORKSPACE/Nature-Circle-debug.apk"
+
+      - name: Build Debug APK
+        shell: bash
+        run: |
+          set -e
+
+          cd "$PROJECT_DIR"
+
+          ./gradlew assembleDebug --stacktrace
+
+          APK=$(find app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+
+          echo "APK generated: $APK"
+
+          cp "$APK" "$GITHUB_WORKSPACE/Nature-Circle-debug.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Nature-Circle-APK
           path: Nature-Circle-debug.apk
+          if-no-files-found: error
